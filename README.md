@@ -62,9 +62,7 @@ ha-tff-fpga/
 ├── dv/             # SystemVerilog UVM-lite verification
 ├── sim/            # Simulation run scripts & memory files
 ├── constraints/    # Vivado TCL scripts
-├── reports/        # Synthesis outputs
-├── docs/           # Architecture records and bug reports
-└── thesis/         # Academic write-up
+└── docs/           # Architecture records and bug reports
 ```
 
 ## AXI4-Lite Register Map

@@ -21,6 +21,11 @@ xsim.dir/
 *.runs/
 *.gen/
 
+# Non-product documentation and reports
+thesis/
+reports/
+*.pdf
+
 # OS
 .DS_Store
 Thumbs.db
