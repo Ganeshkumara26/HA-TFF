@@ -1,0 +1,38 @@
+# HA-TFF FPGA Build Artifacts
+*.vvp
+*.vcd
+*.dcp
+*.bit
+*.jou
+*.log
+*.str
+*.backup.*
+
+# Vivado Project Files
+*.xpr
+*.cache/
+*.hw/
+*.ip_user_files/
+*.sim/
+*.runs/
+*.gen/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# LaTeX build artifacts
+*.aux
+*.lof
+*.lol
+*.lot
+*.out
+*.synctex.gz
+*.toc
