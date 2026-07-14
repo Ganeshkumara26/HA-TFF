@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-and-sim:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Install Icarus Verilog
+      run: sudo apt-get update && sudo apt-get install -y iverilog
+
+    - name: Compile and run simulation
+      working-directory: ./sim
+      run: |
+        iverilog -o sim.vvp -I ../rtl ../rtl/*.v ../tb/tb_ha_tff_system_top.v
+        vvp sim.vvp
