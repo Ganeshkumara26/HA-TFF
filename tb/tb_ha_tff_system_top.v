@@ -44,7 +44,7 @@ module tb_ha_tff_system_top();
     reg         m_axis_tready;
 
     // Instantiate the Unit Under Test (UUT)
-    ha_tff_system_top_v005 uut (
+    ha_tff_system_top uut (
         .clk(clk),
         .rst(rst),
         .s_axi_awaddr(s_axi_awaddr),

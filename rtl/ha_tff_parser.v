@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module ha_tff_parser_v002 (
+module ha_tff_parser (
     input  wire        clk,
     input  wire        rst,
     

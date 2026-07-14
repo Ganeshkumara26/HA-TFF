@@ -13,7 +13,7 @@ Perform the 4 parallel 104-bit comparisons and the priority multiplexing all in 
 - **Pros:** Saves 1 clock cycle of latency.
 - **Cons:** (PHYSICS FIRST: Logic Depth). A 104-bit equality comparator requires a wide AND-tree. Doing 4 of them and multiplexing the result takes at least 4 logic levels. When combined with the routing from the BRAM output pins, this is a massive risk for the 6.4ns timing constraint.
 
-### Option B: Pipelined Matcher (`ha_tff_matcher_v002`)
+### Option B: Pipelined Matcher (`ha_tff_matcher`)
 Register the results of the comparisons.
 - **Pros:** Breaks the critical path. Almost guarantees timing closure.
 - **Cons:** Adds 1 cycle of latency to the firewall decision.
@@ -27,5 +27,5 @@ We originally drafted Option A (`matcher_unpipelined_v001`), but discarded it al
 ## Dependencies
 - **Derived From:** `ADR-004`
 - **Implements:** `REQ-v005`
-- **Creates:** `RTL-v005/ha_tff_matcher_v002.v`, `RTL-v005/ha_tff_datapath_top_v002.v`
+- **Creates:** `RTL-v005/ha_tff_matcher.v`, `RTL-v005/ha_tff_datapath_top_v002.v`
 - **Discarded:** `05_RTL/Discarded/historical/matcher_unpipelined_v001` (Reasoning documented, RTL not saved as it was aborted mid-write).

@@ -1,7 +1,7 @@
 # BUG-008: Pipeline Synchronization
 
 ## Description
-The top-level integration (`ha_tff_system_top_v005.v`) suffered from a severe pipeline synchronization issue. The datapath decision (forward vs drop) emerged from the Matcher as a single-cycle pulse. The packet payload was delayed by a 6-cycle `axi_stream_delay_line`. However, the full datapath latency (Parser + Hash + BRAM + Matcher) was approximately 11-13 cycles. Consequently, the delay line was too short, and the 1-cycle decision pulse could not properly gate multi-cycle AXI-Stream packets, leading to dropped frames and protocol corruption.
+The top-level integration (`ha_tff_system_top.v`) suffered from a severe pipeline synchronization issue. The datapath decision (forward vs drop) emerged from the Matcher as a single-cycle pulse. The packet payload was delayed by a 6-cycle `axi_stream_delay_line`. However, the full datapath latency (Parser + Hash + BRAM + Matcher) was approximately 11-13 cycles. Consequently, the delay line was too short, and the 1-cycle decision pulse could not properly gate multi-cycle AXI-Stream packets, leading to dropped frames and protocol corruption.
 
 ## Root Cause
 - The `axi_stream_delay_line` was parameterized to 6 cycles, which was shorter than the actual Cuckoo-hash pipeline depth.

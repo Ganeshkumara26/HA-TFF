@@ -27,6 +27,6 @@ We are physically bound by the $F_{max}$ of the FPGA fabric. To achieve 10GbE th
 ## Dependencies
 - **Derived From:** `ADR-001` (Supersedes it)
 - **Implements:** `REQ-v002`
-- **Creates:** `RTL-v002/ha_tff_parser_v002.v`
+- **Creates:** `RTL-v002/ha_tff_parser.v`
 - **Verified By:** N/A (Simulations pending)
 - **Synthesized By:** N/A

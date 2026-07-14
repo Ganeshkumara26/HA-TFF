@@ -3,7 +3,7 @@
 // Hardware-Accelerated Telemetry Firewall (HA-TFF) - SYSTEM TOP
 // Pure RTL Datapath for 10Gbps Packet Classification and Telemetry
 
-module ha_tff_system_top_v005 (
+module ha_tff_system_top (
     input  wire         clk,
     input  wire         rst,
 
@@ -134,7 +134,7 @@ module ha_tff_system_top_v005 (
     // Gated input valid based on global parser enable
     wire gated_s_axis_tvalid = s_axis_tvalid & enable_parser;
     
-    ha_tff_datapath_top_v003 datapath_inst (
+    ha_tff_datapath_top datapath_inst (
         .clk(clk),
         .rst(rst),
         .s_axis_tdata(s_axis_tdata),

@@ -1,7 +1,7 @@
 # BUG-006: Sticky Parse Error
 
 ## Description
-The `parse_error` signal in `ha_tff_parser_v002.v` was implemented as a "sticky" flag that remained asserted once triggered, instead of being a 1-cycle pulse or resetting at the end of the packet. Furthermore, packets that were too short (ending before the 5-tuple was fully extracted) did not correctly trigger a parsing error.
+The `parse_error` signal in `ha_tff_parser.v` was implemented as a "sticky" flag that remained asserted once triggered, instead of being a 1-cycle pulse or resetting at the end of the packet. Furthermore, packets that were too short (ending before the 5-tuple was fully extracted) did not correctly trigger a parsing error.
 
 ## Root Cause
 - The `else` blocks in the parser state machine did not explicitly clear `parse_error <= 0`.

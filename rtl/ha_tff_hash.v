@@ -4,7 +4,7 @@
 // Fixes Algorithmic Complexity Vulnerability by introducing a 128-bit secret key.
 // Uses a parameterized Galois-style folding hash for 1-cycle latency.
 
-module ha_tff_hash_v002 (
+module ha_tff_hash (
     input  wire         clk,
     input  wire         rst,
     

@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module ha_tff_datapath_top_v003 (
+module ha_tff_datapath_top (
     input  wire        clk,
     input  wire        rst,
     
@@ -47,7 +47,7 @@ module ha_tff_datapath_top_v003 (
     wire [103:0] parsed_tuple = {src_ip, dst_ip, src_port, dst_port, protocol};
 
     // Instantiate Parser (v002: 64-bit)
-    ha_tff_parser_v002 parser (
+    ha_tff_parser parser (
         .clk(clk),
         .rst(rst),
         .s_axis_tdata(s_axis_tdata),
@@ -69,7 +69,7 @@ module ha_tff_datapath_top_v003 (
     wire        hash_valid;
 
     // Instantiate Hash Function (v002) - Secured Parameterized Hash
-    ha_tff_hash_v002 hasher (
+    ha_tff_hash hasher (
         .clk(clk),
         .rst(rst),
         .tuple_in(parsed_tuple),
@@ -117,7 +117,7 @@ module ha_tff_datapath_top_v003 (
     );
 
     // Instantiate Pipelined Matcher (v002)
-    ha_tff_matcher_v002 matcher (
+    ha_tff_matcher matcher (
         .clk(clk),
         .rst(rst),
         .tuple_in(parsed_tuple),

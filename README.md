@@ -50,10 +50,10 @@ The total pipeline latency is 16 clock cycles (around 102.4 ns at 156.25 MHz).
 
 ## Core Modules
 
-- **Parser** (`ha_tff_parser_v002.v`): AXI-Stream FSM that extracts the 5-tuple.
-- **Hash** (`ha_tff_hash_v002.v`): Keyed 4-seed hash. Fast, 1-cycle latency.
+- **Parser** (`ha_tff_parser.v`): AXI-Stream FSM that extracts the 5-tuple.
+- **Hash** (`ha_tff_hash.v`): Keyed 4-seed hash. Fast, 1-cycle latency.
 - **Rule Table** (`ha_tff_bram_bank.v`): 4 parallel banks of 4096x128-bit BRAM forming a Cuckoo hash table.
-- **Matcher** (`ha_tff_matcher_v002.v`): 4-way parallel exact match.
+- **Matcher** (`ha_tff_matcher.v`): 4-way parallel exact match.
 - **Delay Line** (`axi_stream_delay_line.v`): Shift register that aligns the packet data with the decision logic.
 - **Telemetry & Perf Monitor** (`ha_tff_statistics.v`, `ha_tff_performance_monitor.v`): Tracks RX/TX counts, stalls, occupancy, and latency.
 
