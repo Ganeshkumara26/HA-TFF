@@ -18,27 +18,31 @@ If you just want to pass traffic without filtering, you can disable the firewall
 
 ```mermaid
 flowchart TD
+    CPU["CPU (AXI-Lite)"]
+    MAC["10GbE MAC (AXI-Stream)"]
+    Network["Network (AXI-Stream)"]
+
     subgraph System["ha_tff_system_top"]
         direction TB
         
-        Regs["AXI-Lite Regs + Telemetry"]
-        Datapath["Firewall Datapath (Parser → Hash → BRAM → Matcher)"]
+        Regs["AXI-Lite Regs and Telemetry"]
+        Datapath["Firewall Datapath (Parser -> Hash -> BRAM -> Matcher)"]
         Decision["Decision logic"]
         Delay["Delay Line (16 cycles) + FIFO"]
-        Stats["Stats Engine & Perf Monitor"]
+        Stats["Stats Engine and Perf Monitor"]
         
         Datapath -->|match/action| Decision
         Delay -.->|sync| Decision
     end
 
-    CPU["CPU (AXI-Lite)"] --> Regs
+    CPU --> Regs
     Regs --> CPU
     
-    MAC["10GbE MAC (AXI-Stream)"] --> Datapath
+    MAC --> Datapath
     MAC --> Delay
     MAC --> Stats
     
-    Decision --> Network["Network (AXI-Stream)"]
+    Decision --> Network
     Stats --> Regs
 ```
 
