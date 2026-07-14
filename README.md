@@ -28,37 +28,30 @@ unchanged.
 
 ## Architecture
 
-```
-                       ┌───────────────────────────────────────────────────────┐
-                       │             ha_tff_system_top_v005                     │
-                       │                                                       │
-  AXI4-Lite ────────► │  ┌────────────────────┐                              │
-  (CPU control)         │  │  AXI-Lite Regs    │──► hash secret / control     │
-                         │  │  + Telemetry Read │──► statistics counters        │
-                         │  └────────────────────┘                              │
-                       │                                                       │
-  AXI4-Stream ───────► │  ┌─────────────────────────────────────────────┐    │
-  (10GbE MAC)           │  │            Firewall Datapath                │    │
-                         │  │  Parser → Hash → 4×BRAM → 4-way Matcher   │    │
-                         │  └───────────────┬─────────────────────────────┘    │
-                       │                   │ match / action                     │
-                         │  ┌────────────────┤                                 │
-                         │  │ Decision: forward = match_valid AND             │──────► AXI4-Stream
-                         │  │            action_forward  (else drop)           │        (To Network)
-                         │  └────────────────┘                                 │
-                       │                                                       │
-                         │  ┌─────────────────────────────────────────────┐    │
-                         │  │  AXI-Stream Delay Line (16 cycles)          │    │
-                         │  │  Re-aligns packet data with the decision    │    │
-                         │  │  (Decision FIFO ensures proper ordering)    │    │
-                         │  └─────────────────────────────────────────────┘    │
-                       │                                                       │
-                         │  ┌─────────────────────────────────────────────┐    │
-                         │  │  Statistics Engine                          │    │
-                         │  │  RX/TX pkts+bytes, TCP/UDP/ICMP, errors,  │    │
-                         │  │  drops  (→ AXI-Lite readable counters)     │    │
-                         │  └─────────────────────────────────────────────┘    │
-                         └───────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph System["ha_tff_system_top_v005"]
+        direction TB
+        
+        Regs["AXI-Lite Regs + Telemetry Read"]
+        Datapath["Firewall Datapath<br/>(Parser → Hash → 4×BRAM → 4-way Matcher)"]
+        Decision["Decision logic:<br/>forward = match_valid AND action_forward (else drop)"]
+        Delay["AXI-Stream Delay Line (16 cycles)<br/>+ Decision FIFO"]
+        Stats["Statistics Engine & Performance Monitor"]
+        
+        Datapath -->|match/action| Decision
+        Delay -.->|sync| Decision
+    end
+
+    CPU["CPU (AXI4-Lite)"] -->|control/hash secret| Regs
+    Regs -->|telemetry counters| CPU
+    
+    MAC["10GbE MAC (AXI4-Stream)"] -->|packet data| Datapath
+    MAC -->|packet data| Delay
+    MAC -->|packet data| Stats
+    
+    Decision -->|forwarded data| Network["Network (AXI4-Stream)"]
+    Stats -->|internal updates| Regs
 ```
 
 End-to-end pipeline latency is **16 clock cycles (~102.4 ns at 156.25 MHz)**, dominated by the
