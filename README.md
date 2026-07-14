@@ -1,250 +1,123 @@
 # HA-TFF: Hardware-Accelerated Telemetry Firewall
 
-A pure-RTL, line-rate **packet classification and telemetry firewall** for FPGA. It performs
-**10GbE (156.25 MHz, 64-bit AXI4-Stream)** exact-match filtering of IPv4 TCP/UDP flows and
-exposes **hardware telemetry** (per-protocol packet/byte counts, drops, parse errors) to a CPU
-over an AXI4-Lite control plane.
+This is a pure-RTL, line-rate packet classification and telemetry firewall designed for FPGAs. It filters 10GbE (156.25 MHz, 64-bit AXI4-Stream) IPv4 TCP/UDP traffic using exact-match rules and tracks detailed telemetry data. You can control the rules and read the metrics from a CPU using an AXI4-Lite interface.
 
+## How it works
 
-## What It Does
+When a packet arrives from the MAC:
+1. We parse the Ethernet, IPv4, and TCP/UDP headers to grab the 5-tuple.
+2. We hash this tuple using a keyed XOR-fold hash (to stop hash-flooding attacks).
+3. We look up the hash in a 4-way Cuckoo-hash table (built from block RAMs).
+4. If there's an exact match and the action says "forward", it goes through. Otherwise, it's dropped (default-deny).
+5. While this decision is happening, the packet data waits in a 16-cycle delay line.
+6. The statistics engine logs the packet count, bytes, protocol type, and any parsing errors.
 
-For every 64-bit AXI4-Stream word entering from a 10GbE MAC:
-
-1. **Parse** the Ethernet → IPv4 → TCP/UDP header and extract the **5-tuple**
-   (src/dst IP, src/dst port, protocol).
-2. **Hash** the tuple with a **keyed, 4-seed XOR-fold hash** (128-bit secret loaded via AXI-Lite)
-   to defeat algorithmic-complexity / hash-flooding attacks.
-3. **Lookup** the hashed address in **4 parallel BRAM banks** (4096 × 128-bit each) implementing a
-   Cuckoo-hash rule table.
-4. **Match** the entry exactly (4-way parallel comparator) and read its action bit.
-5. **Decide** the packet: forwarded only when an exact-match rule with `action = forward` exists;
-   otherwise **dropped** (default-deny). The whole decision is pipelined and re-aligned to the
-   original packet via a 16-cycle delay line using a Decision FIFO.
-6. **Count** everything: RX/TX packets & bytes, TCP/UDP/ICMP packets, parser errors, and drops —
-   all readable from the CPU through AXI4-Lite.
-
-When the firewall is disabled (`control[0] = 0`), packets bypass the decision and are forwarded
-unchanged.
+If you just want to pass traffic without filtering, you can disable the firewall via the AXI-Lite control register.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    subgraph System["ha_tff_system_top_v005"]
+    subgraph System["ha_tff_system_top"]
         direction TB
         
-        Regs["AXI-Lite Regs + Telemetry Read"]
-        Datapath["Firewall Datapath<br/>(Parser → Hash → 4×BRAM → 4-way Matcher)"]
-        Decision["Decision logic:<br/>forward = match_valid AND action_forward (else drop)"]
-        Delay["AXI-Stream Delay Line (16 cycles)<br/>+ Decision FIFO"]
-        Stats["Statistics Engine & Performance Monitor"]
+        Regs["AXI-Lite Regs + Telemetry"]
+        Datapath["Firewall Datapath (Parser → Hash → BRAM → Matcher)"]
+        Decision["Decision logic"]
+        Delay["Delay Line (16 cycles) + FIFO"]
+        Stats["Stats Engine & Perf Monitor"]
         
         Datapath -->|match/action| Decision
         Delay -.->|sync| Decision
     end
 
-    CPU["CPU (AXI4-Lite)"] -->|control/hash secret| Regs
-    Regs -->|telemetry counters| CPU
+    CPU["CPU (AXI-Lite)"] --> Regs
+    Regs --> CPU
     
-    MAC["10GbE MAC (AXI4-Stream)"] -->|packet data| Datapath
-    MAC -->|packet data| Delay
-    MAC -->|packet data| Stats
+    MAC["10GbE MAC (AXI-Stream)"] --> Datapath
+    MAC --> Delay
+    MAC --> Stats
     
-    Decision -->|forwarded data| Network["Network (AXI4-Stream)"]
-    Stats -->|internal updates| Regs
+    Decision --> Network["Network (AXI-Stream)"]
+    Stats --> Regs
 ```
 
-End-to-end pipeline latency is **16 clock cycles (~102.4 ns at 156.25 MHz)**, dominated by the
-hash (1) + BRAM (2) + matcher (3-stage) decision and the 16-deep data delay line.
+The total pipeline latency is 16 clock cycles (around 102.4 ns at 156.25 MHz).
 
-## Key Features
+## Core Modules
 
-| Feature | Module | Details |
-|---------|--------|---------|
-| **Packet parsing** | `ha_tff_parser_v002` | 64-bit AXI4-Stream FSM; extracts 5-tuple from IPv4/TCP/UDP frames. Non-IPv4 or non-TCP/UDP → `parse_error`. |
-| **Keyed hashing** | `ha_tff_hash_v002` | 4-seed XOR-fold / bit-reversed hash of the 104-bit tuple XORed with a 128-bit secret (anti-hash-flood). 1-cycle latency. |
-| **Rule table** | `ha_tff_bram_bank` ×4 | Four 4096×128-bit BRAM banks = Cuckoo-hash table. `bit[127]` = valid, `bit[126]` = action (1=forward), `bit[103:0]` = tuple. |
-| **Exact match** | `ha_tff_matcher_v002` | 4-way parallel 104-bit comparator with 3-stage latency alignment. Default action = **drop** (default-deny). |
-| **Control plane** | `ha_tff_axi_lite_regs` | AXI4-Lite slave; runtime hash secret, firewall/parser enable, stats reset, rule programming, and telemetry read-out. |
-| **Pipeline sync** | `axi_stream_delay_line` | Parameterized shift register (default 16) aligning packet bytes with the decision via Decision FIFO. |
-| **Telemetry** | `ha_tff_statistics` | Counters for RX/TX packets & bytes, TCP/UDP/ICMP, parse errors, and drops. Exposed via AXI4-Lite. |
-| **Performance monitor** | `ha_tff_performance_monitor` | Stall, occupancy, and latency-histogram tracking. Fully integrated into the datapath and AXI-Lite register map. |
+- **Parser** (`ha_tff_parser_v002.v`): AXI-Stream FSM that extracts the 5-tuple.
+- **Hash** (`ha_tff_hash_v002.v`): Keyed 4-seed hash. Fast, 1-cycle latency.
+- **Rule Table** (`ha_tff_bram_bank.v`): 4 parallel banks of 4096x128-bit BRAM forming a Cuckoo hash table.
+- **Matcher** (`ha_tff_matcher_v002.v`): 4-way parallel exact match.
+- **Delay Line** (`axi_stream_delay_line.v`): Shift register that aligns the packet data with the decision logic.
+- **Telemetry & Perf Monitor** (`ha_tff_statistics.v`, `ha_tff_performance_monitor.v`): Tracks RX/TX counts, stalls, occupancy, and latency.
 
-## Repository Structure
+## Repo Structure
 
-```
+```text
 ha-tff-fpga/
-├── rtl/                          # Synthesizable Verilog RTL
-│   ├── ha_tff_system_top_v005.v  # Top-level system integration
-│   ├── ha_tff_datapath_top_v003.v# Firewall datapath wrapper (parser→hash→bram→matcher)
-│   ├── ha_tff_parser_v002.v      # Ethernet/IPv4/TCP/UDP 5-tuple parser FSM
-│   ├── ha_tff_hash_v002.v        # Keyed 4-seed XOR-fold hash (128-bit secret)
-│   ├── ha_tff_bram_bank.v        # Parameterized BRAM bank (4096×128b)
-│   ├── ha_tff_matcher_v002.v     # 4-way pipelined exact-match engine (default-deny)
-│   ├── ha_tff_axi_lite_regs.v    # AXI4-Lite slave: control + rules + telemetry read
-│   ├── ha_tff_statistics.v       # Telemetry counter engine
-│   ├── ha_tff_performance_monitor.v # Stall/occupancy/latency monitor (integrated into top + AXI-Lite)
-│   └── axi_stream_delay_line.v   # Parameterized pipeline delay
-├── tb/                           # Legacy Verilog testbench (Icarus-compatible)
-│   └── tb_ha_tff_system_top.v   # Basic datapath + AXI-Lite telemetry testbench
-├── dv/                           # Modern SystemVerilog verification environment
-│   ├── tb_ha_tff_dv_top.sv      # UVM-lite DV top: SVA bind, coverage, random traffic
-│   ├── dv_packet_generator.sv    # Constrained-random packet/error generator
-│   ├── ha_tff_sva.sv            # Concurrent AXI-Stream / parser assertions
-│   ├── ha_tff_coverage.sv       # Functional coverage (protocols, errors, decisions)
-│   └── golden_model.py           # Standalone Python (scapy) telemetry oracle
-├── sim/                          # Simulation data
-│   ├── bank0.mem … bank3.mem    # BRAM Cuckoo-table initialization (all-zero by default)
-├── constraints/                  # Synthesis scripts
-│   └── synth.tcl                # Vivado batch synthesis (Artix-7 xc7a100tfgg484-1)
-├── reports/                      # Synthesis reports (Vivado 2026.1, Artix-7 xc7a100tfgg484-1)
-│   ├── utilization_report.txt   # Vivado resource utilization (ha_tff_system_top_v005 + PerfMon)
-│   ├── timing_summary.txt       # Timing closure report @ 156.25 MHz
-│   ├── power_report.txt          # On-chip power estimation
-│   └── ha_tff_system_top_v005_synth.dcp # Synthesized design checkpoint
-├── docs/                        # Documentation
-│   ├── design_decisions/        # Architecture Decision Records (ADR-001..010)
-│   └── bugs/                    # Bug reports (BUG-001, BUG-006..008)
-├── thesis/                      # Academic thesis (LaTeX source and PDF)
-├── LICENSE
-├── .gitignore
-└── README.md
+├── rtl/            # Synthesizable Verilog
+├── tb/             # Icarus testbenches
+├── dv/             # SystemVerilog UVM-lite verification
+├── sim/            # Simulation run scripts & memory files
+├── constraints/    # Vivado TCL scripts
+├── reports/        # Synthesis outputs
+├── docs/           # Architecture records and bug reports
+└── thesis/         # Academic write-up
 ```
 
 ## AXI4-Lite Register Map
 
-All registers are 32-bit. Addresses are byte offsets. The slave samples `awaddr`/`araddr` on bits
-`[7:2]`.
+The AXI4-Lite slave provides runtime control and telemetry access. Here are the key byte offsets:
 
-| Offset | Name | Access | Description |
-|--------|------|--------|-------------|
-| `0x00` | `key0` | R/W | Hash secret key word 0 (default `0xDEADBEEF`) |
-| `0x04` | `key1` | R/W | Hash secret key word 1 (default `0xCAFEBABE`) |
-| `0x08` | `key2` | R/W | Hash secret key word 2 (default `0x8BADF00D`) |
-| `0x0C` | `key3` | R/W | Hash secret key word 3 (default `0x0DEFACED`) |
-| `0x10` | `control` | R/W | Bit0 = firewall enable, Bit1 = parser enable, Bit2 = stats reset (self-clearing). Default `0x00000003`. |
-| `0x20` | `rx_pkts` | R | Total received packets |
-| `0x24` | `tx_pkts` | R | Total forwarded packets |
-| `0x28` | `drops` | R | Total dropped packets (rule-based) |
-| `0x2C` | `rx_bytes_lo` | R | RX bytes, low 32 bits |
-| `0x30` | `rx_bytes_hi` | R | RX bytes, high 32 bits |
-| `0x34` | `tx_bytes_lo` | R | TX bytes, low 32 bits |
-| `0x38` | `tx_bytes_hi` | R | TX bytes, high 32 bits |
-| `0x3C` | `tcp_pkts` | R | TCP packet count |
-| `0x40` | `udp_pkts` | R | UDP packet count |
-| `0x44` | `icmp_pkts` | R | ICMP packet count |
-| `0x48` | `parse_errors` | R | Parser error count |
-| `0x4C` | `magic` | R | Magic/version id `0xFACEB00C` |
-| `0x50` | `rule_w0` | W | Rule data word 0 (`tuple[31:0]`) |
-| `0x54` | `rule_w1` | W | Rule data word 1 (`tuple[63:32]`) |
-| `0x58` | `rule_w2` | W | Rule data word 2 (`tuple[95:64]`) |
-| `0x5C` | `rule_w3` | W | Rule data word 3 (`bit127 valid`, `bit126 action`, `tuple[103:96]`) |
-| `0x60` | `rule_ctrl` | W | `addr[11:0]`, `bank[17:16]`, `write_en[31]` (pulses `rule_write_en` one cycle) |
-| `0x64` | `rx_stalls` | R | (PerfMon) RX interface stalls (tvalid without tready) |
-| `0x68` | `tx_stalls` | R | (PerfMon) TX interface stalls (tvalid without tready) |
-| `0x6C` | `occupancy` | R | (PerfMon) `[31:16]` peak occupancy, `[15:0]` current occupancy |
-| `0x70` | `lat_u10`   | R | (PerfMon) Latency histogram: < 10 cycles |
-| `0x74` | `lat_10_20` | R | (PerfMon) Latency histogram: 10 to 20 cycles |
-| `0x78` | `lat_o20`   | R | (PerfMon) Latency histogram: > 20 cycles |
+- `0x00 - 0x0C`: Hash secret keys (4 words)
+- `0x10`: Control register (firewall enable, parser enable, stats reset)
+- `0x20 - 0x48`: Standard telemetry (RX/TX packets, drops, bytes, protocol counts, parse errors)
+- `0x50 - 0x60`: Rule programming interface (tuple data and bank control)
+- `0x64 - 0x78`: Performance monitor (stalls, real-time occupancy, latency histogram)
 
-### Rule-table entry format (128-bit, per BRAM word)
-```
-bit[127]   = entry valid
-bit[126]   = action (1 = forward, 0 = drop)
-bit[125:104] = protocol (8-bit)   // upper bits of the 104-bit tuple
-bit[103:0] = {src_ip[31:0], dst_ip[31:0], src_port[15:0], dst_port[15:0]}
-```
-The 4 banks are indexed by the 4 independent hash seeds. To program a rule, write `rule_w0..3`
-then pulse `rule_ctrl` with the target bank and address.
+*See the RTL comments in `ha_tff_axi_lite_regs.v` for bit-level details.*
 
 ## Quick Start
 
-### Simulation — legacy testbench (Icarus Verilog)
+### Icarus Simulation
 ```bash
 cd sim
 iverilog -o sim.vvp -I ../rtl ../rtl/*.v ../tb/tb_ha_tff_system_top.v
 vvp sim.vvp
-# open tb_ha_tff_system_top.vcd in GTKWave
 ```
 
-### Simulation — SystemVerilog DV environment
-The `dv/` suite uses classes, covergroups, SVA `bind`, and `$urandom`, which require a
-SystemVerilog simulator (e.g. Questa/ModelSim, Xcelium, or Verilator with `--sv`). Icarus
-Verilog has only partial SystemVerilog support and is **not** sufficient.
+### SystemVerilog DV
+You'll need a real SystemVerilog simulator (Questa, Xcelium, etc.) for this, since it relies on SVA and constrained random generation.
 ```bash
-# Example (Questa/ModelSim)
-vlog -sv -work work ../rtl/*.v ../dv/ha_tff_sva.sv ../dv/ha_tff_coverage.sv \
-      ../dv/dv_packet_generator.sv ../dv/tb_ha_tff_dv_top.sv
+vlog -sv -work work ../rtl/*.v ../dv/*.sv
 vsim -c work.tb_ha_tff_dv_top -do "run -all"
 ```
-`dv/golden_model.py` is a **standalone** scapy-based oracle that prints expected telemetry for a
-PCAP; it is not yet auto-checked against the SV testbench output.
 
 ### Synthesis (Vivado)
 ```bash
 cd constraints
 vivado -mode batch -source synth.tcl
 ```
-`synth.tcl` reads the current `rtl/` sources, synthesizes `ha_tff_system_top_v005` for the
-Artix-7 `xc7a100tfgg484-1` at 156.25 MHz, and writes utilization/timing/power reports to
-`reports/`.
+*Targeting the Artix-7 `xc7a100tfgg484-1`.*
 
-## Synthesis Results (Vivado 2026.1, Artix-7 xc7a100tfgg484-1)
+## Performance & Resources
 
-The committed `reports/utilization_report.txt` reflects **design `ha_tff_system_top_v005`** with the 
-performance monitor fully integrated.
+Synthesized on Vivado 2026.1 (Artix-7 `xc7a100tfgg484-1`):
 
-| Resource | Used | Available | Utilization |
-|----------|------|-----------|:-----------:|
-| Slice LUTs | 811 | 63,400 | 1.28% |
-| Slice Registers | 1608 | 126,800 | 1.27% |
-| Block RAM (36Kb) | 48 | 135 | 35.56% |
-| Block RAM (18Kb) | 0 | 270 | 0.00% |
-| DSP Slices | 0 | 240 | 0.00% |
-| Bonded IOB | 241 | 285 | 84.56% |
+- **LUTs**: ~811 (1.28%)
+- **Registers**: ~1608 (1.27%)
+- **BRAM**: 48 blocks (35.56%)
+- **DSPs**: 0 
+- **Fmax**: Easily meets 156.25 MHz timing.
 
-> **Zero DSP slices** — the datapath uses only XOR/shift/comparator logic, making it trivially
-> scalable. The 84.56% IOB utilization reflects the wide AXI4-Stream + AXI4-Lite bus pinout properly accommodated in the larger FGG484 package.
+The design uses no DSP slices, keeping it highly portable and scalable. The I/O utilization is around 85% due to the wide AXI buses.
 
-## Known Limitations
-
-- **IPv4 + TCP/UDP only.** ARP, IPv6, and ICMP are parsed as `parse_error` and dropped. (ICMP is
-  *counted* in `icmp_pkts` only when a valid 5-tuple is produced, which the current parser does
-  not do — so live ICMP increments `parse_errors` instead.)
-- **Default-deny.** Packets without a matching forward rule are dropped, including all unmatched
-  valid flows. Disable the firewall (`control[0]=0`) to forward everything.
-- **Static rule table.** Rules are loaded via AXI4-Lite at runtime but the Cuckoo placement is
-  expected to be pre-computed offline; the hardware performs lookup only, not insertion/eviction.
-- **Empty tables by default.** `sim/bank*.mem` ship all-zero (no valid entries), so out-of-the-box
-  every packet is dropped until rules are programmed.
-
-## Open Items
-
-- **SVA `bind` path** in `dv/tb_ha_tff_dv_top.sv` reaches `uut.datapath_inst.parser.*`; verify the
-  hierarchical path after any datapath instance-name changes.
-- **Golden-model automation**: couple `dv/golden_model.py` to the SV testbench for self-checking
-  telemetry comparisons.
-
-## Engineering History (iteration map)
-
-| Iteration | Focus | Key Decision |
-|-----------|-------|--------------|
-| v001 | Parsing | AXI4-Stream 5-tuple extraction |
-| v002 | Parser | Pipelined 64-bit Ethernet frame parser (`ha_tff_parser_v002`) |
-| v003 | Hashing | Keyed 4-seed XOR-fold hash (`ha_tff_hash_v002`) |
-| v004 | Memory | BRAM Cuckoo-hash banks (`ha_tff_bram_bank`) |
-| v005 | Datapath | 4-way parallel matcher + delay-line alignment (`ha_tff_datapath_top_v003`, `ha_tff_matapath_top_v005`→`ha_tff_system_top_v005`) |
-| +telemetry | Monitoring | `ha_tff_statistics` engine + AXI-Lite telemetry read-out |
-| +perf_mon | Monitoring | `ha_tff_performance_monitor` integration + IOB constraint resolution |
-
-### Bug Reports (still relevant to current code)
-| ID | Title | Root Cause | Fix |
-|----|-------|-----------|-----|
-| BUG-001 | Tuple Valid Timeout | Parser `tuple_valid` not clearing properly | Added timeout/reset-on-`tlast` behaviour |
-| BUG-006 | Sticky Parse Error | `parse_error` was not cleared in the `else` block | Added `parse_error <= 0` and short packet handling |
-| BUG-007 | Occupancy Tracker Flaw | `active_packets` was gated by latency measurement | Separated tracking logic to independently count concurrent packets |
-| BUG-008 | Pipeline Synchronization | Delay line latency was 6 (too short), decision was 1-cycle pulse | Increased latency to 16, added Decision FIFO to robustly stream decisions |
+## Limitations
+- **Protocols**: It only cares about IPv4 TCP/UDP. Things like ARP, IPv6, and ICMP will get dropped (and flagged as parse errors).
+- **Default Deny**: If a packet doesn't match a rule, it gets dropped. You can bypass this by turning the firewall off via the control register.
+- **Hardware only looks up rules**: The actual Cuckoo hashing math for *inserting* rules into the table has to be done in software before programming the hardware.
 
 ## License
-
-MIT License. See [LICENSE](LICENSE).
+MIT
