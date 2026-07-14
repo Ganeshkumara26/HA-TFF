@@ -20,7 +20,17 @@ module ha_tff_datapath_top_v003 (
     output wire        action_forward,
     
     // Error Monitoring
-    output wire        parse_error
+    output wire        parse_error,
+    
+    // Telemetry Monitoring
+    output wire [7:0]  protocol_out,
+    output wire        tuple_valid_out,
+    
+    // Rule Programming Interface (From AXI-Lite)
+    input  wire [127:0] rule_write_data,
+    input  wire [11:0]  rule_write_addr,
+    input  wire [1:0]   rule_write_bank,
+    input  wire         rule_write_en
 );
 
     // Wires from Parser
@@ -30,6 +40,9 @@ module ha_tff_datapath_top_v003 (
     wire [15:0] dst_port;
     wire [7:0]  protocol;
     wire        tuple_valid;
+    
+    assign protocol_out = protocol;
+    assign tuple_valid_out = tuple_valid;
     
     wire [103:0] parsed_tuple = {src_ip, dst_ip, src_port, dst_port, protocol};
 
@@ -73,26 +86,34 @@ module ha_tff_datapath_top_v003 (
     wire [127:0] b0_data, b1_data, b2_data, b3_data;
     wire         b0_v, b1_v, b2_v, b3_v;
 
-    // Instantiate 4 BRAM Banks
+    // Instantiate 4 BRAM Banks with Rule Programming Interface
     ha_tff_bram_bank #(.INIT_FILE("../sim/bank0.mem")) bank0 (
         .clk(clk), .rst(rst),
         .read_addr(h0), .read_en(hash_valid),
-        .read_data(b0_data), .read_valid(b0_v)
+        .read_data(b0_data), .read_valid(b0_v),
+        .write_addr(rule_write_addr), .write_data(rule_write_data),
+        .write_en(rule_write_en && (rule_write_bank == 2'd0))
     );
     ha_tff_bram_bank #(.INIT_FILE("../sim/bank1.mem")) bank1 (
         .clk(clk), .rst(rst),
         .read_addr(h1), .read_en(hash_valid),
-        .read_data(b1_data), .read_valid(b1_v)
+        .read_data(b1_data), .read_valid(b1_v),
+        .write_addr(rule_write_addr), .write_data(rule_write_data),
+        .write_en(rule_write_en && (rule_write_bank == 2'd1))
     );
     ha_tff_bram_bank #(.INIT_FILE("../sim/bank2.mem")) bank2 (
         .clk(clk), .rst(rst),
         .read_addr(h2), .read_en(hash_valid),
-        .read_data(b2_data), .read_valid(b2_v)
+        .read_data(b2_data), .read_valid(b2_v),
+        .write_addr(rule_write_addr), .write_data(rule_write_data),
+        .write_en(rule_write_en && (rule_write_bank == 2'd2))
     );
     ha_tff_bram_bank #(.INIT_FILE("../sim/bank3.mem")) bank3 (
         .clk(clk), .rst(rst),
         .read_addr(h3), .read_en(hash_valid),
-        .read_data(b3_data), .read_valid(b3_v)
+        .read_data(b3_data), .read_valid(b3_v),
+        .write_addr(rule_write_addr), .write_data(rule_write_data),
+        .write_en(rule_write_en && (rule_write_bank == 2'd3))
     );
 
     // Instantiate Pipelined Matcher (v002)

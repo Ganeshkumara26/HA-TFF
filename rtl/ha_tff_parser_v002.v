@@ -50,6 +50,7 @@ module ha_tff_parser_v002 (
             ethertype   <= 0;
         end else begin
             tuple_valid <= 0;
+            parse_error <= 0;
             
             if (s_axis_tvalid) begin
                 if (!parsing) begin
@@ -86,6 +87,11 @@ module ha_tff_parser_v002 (
                 if (s_axis_tlast) begin
                     parsing <= 0;
                     word_cnt <= 0;
+                    if (word_cnt < 4 || (word_cnt == 4 && !parsing)) begin
+                        // Wait, if word_cnt < 4, it's definitely a short packet.
+                        // If it's a short packet, we want to pulse parse_error so a decision is generated.
+                        if (parsing && word_cnt < 4) parse_error <= 1;
+                    end
                 end
             end
         end

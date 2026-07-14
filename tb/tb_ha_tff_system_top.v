@@ -1,26 +1,27 @@
 `timescale 1ns / 1ps
 
-// System-Level Testbench for HA-TFF v005
-// Tests the complete firewall pipeline: Parser → Hash → Matcher + SNN → Decision
-// Includes AXI4-Lite control plane stimulus for dynamic weight loading.
+// Hardware-Accelerated Telemetry Firewall - Testbench
+// Tests the complete pipeline: Parser -> Hash -> Matcher -> Telemetry -> Decision
+// Reads Telemetry Statistics via AXI4-Lite Control Plane.
 
-module tb_ha_tff_system_top;
+module tb_ha_tff_system_top();
 
-    reg clk;
-    reg rst;
+    reg         clk;
+    reg         rst;
 
-    // AXI4-Lite Control Plane
-    reg [31:0]  s_axi_awaddr;
+    // AXI4-Lite Control Plane Interface
+    reg  [31:0] s_axi_awaddr;
     reg         s_axi_awvalid;
     wire        s_axi_awready;
-    reg [31:0]  s_axi_wdata;
-    reg [3:0]   s_axi_wstrb;
+    reg  [31:0] s_axi_wdata;
+    reg  [3:0]  s_axi_wstrb;
     reg         s_axi_wvalid;
     wire        s_axi_wready;
     wire [1:0]  s_axi_bresp;
     wire        s_axi_bvalid;
     reg         s_axi_bready;
-    reg [31:0]  s_axi_araddr;
+    
+    reg  [31:0] s_axi_araddr;
     reg         s_axi_arvalid;
     wire        s_axi_arready;
     wire [31:0] s_axi_rdata;
@@ -29,8 +30,8 @@ module tb_ha_tff_system_top;
     reg         s_axi_rready;
 
     // AXI4-Stream Input (10GbE MAC)
-    reg [63:0]  s_axis_tdata;
-    reg [7:0]   s_axis_tkeep;
+    reg  [63:0] s_axis_tdata;
+    reg  [7:0]  s_axis_tkeep;
     reg         s_axis_tvalid;
     reg         s_axis_tlast;
     wire        s_axis_tready;
@@ -42,11 +43,10 @@ module tb_ha_tff_system_top;
     wire        m_axis_tlast;
     reg         m_axis_tready;
 
-    // DUT: Final system top (v005 with AXI-Lite control plane)
+    // Instantiate the Unit Under Test (UUT)
     ha_tff_system_top_v005 uut (
         .clk(clk),
         .rst(rst),
-        // AXI4-Lite
         .s_axi_awaddr(s_axi_awaddr),
         .s_axi_awvalid(s_axi_awvalid),
         .s_axi_awready(s_axi_awready),
@@ -64,7 +64,6 @@ module tb_ha_tff_system_top;
         .s_axi_rresp(s_axi_rresp),
         .s_axi_rvalid(s_axi_rvalid),
         .s_axi_rready(s_axi_rready),
-        // AXI4-Stream
         .s_axis_tdata(s_axis_tdata),
         .s_axis_tkeep(s_axis_tkeep),
         .s_axis_tvalid(s_axis_tvalid),
@@ -77,143 +76,91 @@ module tb_ha_tff_system_top;
         .m_axis_tready(m_axis_tready)
     );
 
-    // =========================================================================
-    // Clock Generation: 156.25 MHz (6.4ns period)
-    // =========================================================================
-    initial begin
-        $dumpfile("tb_ha_tff_system_top.vcd");
-        $dumpvars(0, tb_ha_tff_system_top);
-        clk = 0;
-        forever #3.2 clk = ~clk;
-    end
+    // Clock generation (156.25 MHz -> 6.4ns period)
+    always #3.2 clk = ~clk;
 
-    // =========================================================================
-    // AXI4-Lite Write Task
-    // =========================================================================
-    task axi_lite_write;
-        input [31:0] addr;
-        input [31:0] data;
+    // AXI-Lite Write Task
+    task axi_write(input [31:0] addr, input [31:0] data);
         begin
             @(posedge clk);
             s_axi_awaddr  <= addr;
             s_axi_awvalid <= 1;
             s_axi_wdata   <= data;
-            s_axi_wstrb   <= 4'hF;
             s_axi_wvalid  <= 1;
-            s_axi_bready  <= 1;
+            wait(s_axi_awready && s_axi_wready);
             @(posedge clk);
             s_axi_awvalid <= 0;
             s_axi_wvalid  <= 0;
+            wait(s_axi_bvalid);
+            s_axi_bready  <= 1;
             @(posedge clk);
+            s_axi_bready  <= 0;
         end
     endtask
 
-    // =========================================================================
-    // Output Monitor
-    // =========================================================================
-    always @(posedge clk) begin
-        if (m_axis_tvalid && m_axis_tready) begin
-            $display("[%0t] SYSTEM OUT: Packet Forwarded. Data: %h", $time, m_axis_tdata);
+    // AXI-Lite Read Task
+    task axi_read(input [31:0] addr);
+        begin
+            @(posedge clk);
+            s_axi_araddr  <= addr;
+            s_axi_arvalid <= 1;
+            wait(s_axi_arready);
+            @(posedge clk);
+            s_axi_arvalid <= 0;
+            wait(s_axi_rvalid);
+            s_axi_rready  <= 1;
+            $display("[%0t] READ ADDR 0x%h = %d", $time, addr, s_axi_rdata);
+            @(posedge clk);
+            s_axi_rready  <= 0;
         end
-        if (uut.anomaly_detected) begin
-            $display("[%0t] SNN TRIGGERED: Anomaly Active! All traffic dropping.", $time);
-        end
-    end
+    endtask
 
-    // =========================================================================
-    // Main Stimulus
-    // =========================================================================
     initial begin
-        // Initialize all signals
+        clk = 0;
         rst = 1;
-        s_axis_tvalid = 0;
-        s_axis_tdata  = 0;
-        s_axis_tkeep  = 8'hFF;
-        s_axis_tlast  = 0;
+        s_axi_awaddr = 0; s_axi_awvalid = 0; s_axi_wdata = 0; s_axi_wstrb = 4'hF; s_axi_wvalid = 0; s_axi_bready = 0;
+        s_axi_araddr = 0; s_axi_arvalid = 0; s_axi_rready = 0;
+        s_axis_tdata = 0; s_axis_tkeep = 0; s_axis_tvalid = 0; s_axis_tlast = 0;
         m_axis_tready = 1;
 
-        s_axi_awaddr  = 0;
-        s_axi_awvalid = 0;
-        s_axi_wdata   = 0;
-        s_axi_wstrb   = 0;
-        s_axi_wvalid  = 0;
-        s_axi_bready  = 0;
-        s_axi_araddr  = 0;
-        s_axi_arvalid = 0;
-        s_axi_rready  = 1;
+        #50;
+        rst = 0;
+        #50;
+
+        $display("[%0t] PHASE 1: Programming Hash Secret Key via AXI-Lite", $time);
+        axi_write(32'h00, 32'h11223344);
+        axi_write(32'h04, 32'h55667788);
+        axi_write(32'h08, 32'h99AABBCC);
+        axi_write(32'h0C, 32'hDDEEFF00);
 
         #100;
-        rst = 0;
-
-        // -----------------------------------------------------------------
-        // Phase 1: Program SNN weights via AXI-Lite
-        // -----------------------------------------------------------------
-        $display("[%0t] PHASE 1: Programming SNN weights via AXI-Lite", $time);
-
-        // Hash secret key (registers 0x00-0x0C)
-        axi_lite_write(32'h00, 32'hDEADBEEF);
-        axi_lite_write(32'h04, 32'hCAFEBABE);
-        axi_lite_write(32'h08, 32'h8BADF00D);
-        axi_lite_write(32'h0C, 32'h0DEFACED);
-
-        // w0 weights (registers 0x10-0x1C)
-        axi_lite_write(32'h10, {16'd20, 16'd50});
-        axi_lite_write(32'h14, {16'd10, 16'd0});
-        axi_lite_write(32'h18, {-16'd50, -16'd100});
-        axi_lite_write(32'h1C, {16'd40, 16'd30});
-
-        // w1 weights (registers 0x20-0x2C)
-        axi_lite_write(32'h20, {-16'd20, -16'd40});
-        axi_lite_write(32'h24, {16'd80, 16'd150});
-        axi_lite_write(32'h28, {16'd60, 16'd120});
-        axi_lite_write(32'h2C, {16'd50, -16'd30});
-
-        $display("[%0t] PHASE 1 COMPLETE: Weights programmed", $time);
-
-        // -----------------------------------------------------------------
-        // Phase 2: Inject Safe Traffic
-        // -----------------------------------------------------------------
-        #50;
-        $display("[%0t] PHASE 2: Injecting safe traffic metadata", $time);
-        force uut.parser_snn_inst.tuple_valid = 1;
-        force uut.parser_snn_inst.src_ip      = 32'h0A000001;
-        force uut.parser_snn_inst.dst_ip      = 32'h08080808;
-        force uut.parser_snn_inst.src_port    = 16'd10000;
-        force uut.parser_snn_inst.dst_port    = 16'd80;
-        force uut.parser_snn_inst.protocol    = 8'd6; // TCP
-
-        force uut.datapath_inst.match_valid    = 1;
-        force uut.datapath_inst.action_forward = 1;
-
-        s_axis_tvalid = 1;
-        s_axis_tdata  = 64'h5AFE_CAFE_BEEF_0001;
-
-        #6.4; // 1 clock cycle
-        s_axis_tvalid = 0;
-        s_axis_tdata  = 0;
-
-        // -----------------------------------------------------------------
-        // Phase 3: Inject Anomaly Traffic
-        // -----------------------------------------------------------------
-        #250;
-        $display("[%0t] PHASE 3: Injecting anomaly traffic (UDP, High Port, Multicast, DNS)", $time);
-        force uut.parser_snn_inst.src_ip   = 32'h0A000001;
-        force uut.parser_snn_inst.dst_ip   = 32'h080808FF;  // Broadcast
-        force uut.parser_snn_inst.src_port = 16'd50000;     // High port
-        force uut.parser_snn_inst.dst_port = 16'd53;        // DNS
-        force uut.parser_snn_inst.protocol = 8'd17;         // UDP
+        $display("[%0t] PHASE 2: Transmitting Valid Packet (Forward Rule)", $time);
+        // Valid packet headers (simulating 64-byte ethernet frame)
+        @(posedge clk);
+        s_axis_tvalid <= 1; s_axis_tdata <= 64'h0000000000000000; s_axis_tkeep <= 8'hFF; s_axis_tlast <= 0; // MAC
+        @(posedge clk);
+        s_axis_tdata <= 64'h4500002800004000; // IP header start
+        @(posedge clk);
+        s_axis_tdata <= 64'h4006A60FC0A80101; // Protocol TCP (06), Src IP: 192.168.1.1
+        @(posedge clk);
+        s_axis_tdata <= 64'h0A000001005004D2; // Dst IP: 10.0.0.1, Src Port: 80, Dst Port: 1234
+        @(posedge clk);
+        s_axis_tdata <= 64'h0000000000000000; s_axis_tlast <= 1; // Tail
+        @(posedge clk);
+        s_axis_tvalid <= 0; s_axis_tlast <= 0;
 
         #200;
-        // Inject packet while anomaly is active — should be DROPPED
-        s_axis_tvalid = 1;
-        s_axis_tdata  = 64'hBAD0_BAD0_BAD0_BAD0;
-
-        #6.4; // 1 cycle
-        s_axis_tvalid = 0;
-        s_axis_tdata  = 0;
+        
+        $display("[%0t] PHASE 3: Reading Telemetry Statistics", $time);
+        axi_read(32'h20); // Total Packets RX
+        axi_read(32'h24); // Total Packets TX
+        axi_read(32'h28); // Total Packets DROP
+        axi_read(32'h2C); // Total Bytes RX (Lower 32)
+        axi_read(32'h34); // Total Bytes TX (Lower 32)
+        axi_read(32'h3C); // TCP Packets
 
         #100;
-        $display("[%0t] TEST COMPLETE", $time);
+        $display("[%0t] Simulation Complete.", $time);
         $finish;
     end
 

@@ -10,7 +10,12 @@ module ha_tff_bram_bank #(
     input  wire [11:0]  read_addr,
     input  wire         read_en,
     output reg  [127:0] read_data,
-    output reg          read_valid
+    output reg          read_valid,
+    
+    // Control Plane (Write-Only for Rule Updates)
+    input  wire [11:0]  write_addr,
+    input  wire         write_en,
+    input  wire [127:0] write_data
 );
 
     // 4096 entries x 128 bits = 512Kb
@@ -32,6 +37,10 @@ module ha_tff_bram_bank #(
         end else begin
             valid_d1 <= read_en;
             read_valid <= valid_d1; // 2-cycle latency to match typical BRAM
+            
+            if (write_en) begin
+                memory[write_addr] <= write_data;
+            end
             
             if (read_en) begin
                 read_data <= memory[read_addr];

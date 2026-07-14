@@ -11,7 +11,7 @@ The Cuckoo Hash Datapath requires 4 independent memory banks to store 104-bit tu
 ### Option A: Distributed RAM (LUTRAM)
 Synthesize the memory directly out of FPGA fabric LUTs.
 - **Pros:** Asynchronous reads are possible, reducing latency to 0 cycles.
-- **Cons:** (PHYSICS FIRST: LUT Utilization). 430 Kbits per bank * 4 banks = 1.7 Megabits. Implementing 1.7 Mb in LUTRAM would consume almost the entire Artix-7 logic fabric, leaving no room for the parser or SNN. 
+- **Cons:** (PHYSICS FIRST: LUT Utilization). 430 Kbits per bank * 4 banks = 1.7 Megabits. Implementing 1.7 Mb in LUTRAM would consume almost the entire Artix-7 logic fabric, leaving no room for the parser or datapath logic.
 
 ### Option B: Block RAM (BRAM36E1)
 Instantiate Xilinx 36Kb Block RAM primitives.

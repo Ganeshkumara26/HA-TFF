@@ -7,8 +7,12 @@
 *.log
 *.str
 *.backup.*
+*.wdb
+*.pb
 
 # Vivado Project Files
+.Xil/
+xsim.dir/
 *.xpr
 *.cache/
 *.hw/
@@ -36,3 +40,12 @@ desktop.ini
 *.out
 *.synctex.gz
 *.toc
+*.idx
+*.ilg
+*.ind
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.pyc
+__pycache__/
