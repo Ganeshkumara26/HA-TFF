@@ -12,7 +12,7 @@
 #   make clean   - remove build artifacts
 
 VERILATOR = verilator
-VFLAGS = -Wall --trace --cc -I../rtl
+VFLAGS = -Wno-fatal -Wno-lint -Wno-style --trace --cc -I../rtl
 
 # RTL source files
 PKG_SRC = ../rtl/ha_tff_pkg.sv
@@ -27,17 +27,17 @@ TOP_SRC = ../rtl/ha_tff_top.sv
 all: top
 
 parser:
-	$(VERILATOR) $(VFLAGS) $(PKG_SRC) $(PARSER_SRC) --exe ../tb/tb_eth_parser.cpp
+	$(VERILATOR) $(VFLAGS) --top-module eth_parser $(PKG_SRC) $(PARSER_SRC) --exe ../tb/tb_eth_parser.cpp
 	make -j -C obj_dir -f Veth_parser.mk Veth_parser
 	./obj_dir/Veth_parser
 
 filter:
-	$(VERILATOR) $(VFLAGS) $(PKG_SRC) $(FILTER_SRC) --exe ../tb/tb_mav_filter.cpp
+	$(VERILATOR) $(VFLAGS) --top-module mav_filter $(PKG_SRC) $(FILTER_SRC) --exe ../tb/tb_mav_filter.cpp
 	make -j -C obj_dir -f Vmav_filter.mk Vmav_filter
 	./obj_dir/Vmav_filter
 
 top:
-	$(VERILATOR) $(VFLAGS) $(PKG_SRC) $(PARSER_SRC) $(FILTER_SRC) $(FIFO_SRC) $(WB_SRC) $(TOP_SRC) --exe ../tb/tb_ha_tff_top.cpp
+	$(VERILATOR) $(VFLAGS) --top-module ha_tff_top $(PKG_SRC) $(PARSER_SRC) $(FILTER_SRC) $(FIFO_SRC) $(WB_SRC) $(TOP_SRC) --exe ../tb/tb_ha_tff_top.cpp
 	make -j -C obj_dir -f Vha_tff_top.mk Vha_tff_top
 	./obj_dir/Vha_tff_top
 

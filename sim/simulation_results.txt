@@ -1,0 +1,21 @@
+verilator -Wno-fatal -Wno-lint -Wno-style --trace --cc -I../rtl --top-module ha_tff_top ../rtl/ha_tff_pkg.sv ../rtl/eth_parser.sv ../rtl/mav_filter.sv ../rtl/telem_fifo.sv ../rtl/wb_slave.sv ../rtl/ha_tff_top.sv --exe ../tb/tb_ha_tff_top.cpp
+make -j -C obj_dir -f Vha_tff_top.mk Vha_tff_top
+make[1]: Entering directory '/tmp/ha-tff-rtl/sim/obj_dir'
+g++  -I.  -MMD -I/usr/share/verilator/include -I/usr/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=1 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow      -Os -c -o tb_ha_tff_top.o ../../tb/tb_ha_tff_top.cpp
+g++  -I.  -MMD -I/usr/share/verilator/include -I/usr/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=1 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow      -Os -c -o verilated.o /usr/share/verilator/include/verilated.cpp
+g++  -I.  -MMD -I/usr/share/verilator/include -I/usr/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=1 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow      -Os -c -o verilated_vcd_c.o /usr/share/verilator/include/verilated_vcd_c.cpp
+/usr/bin/perl /usr/share/verilator/bin/verilator_includer -DVL_INCLUDE_OPT=include Vha_tff_top.cpp Vha_tff_top___024unit.cpp Vha_tff_top__Trace.cpp Vha_tff_top__Slow.cpp Vha_tff_top___024unit__Slow.cpp Vha_tff_top__Syms.cpp Vha_tff_top__Trace__Slow.cpp > Vha_tff_top__ALL.cpp
+g++  -I.  -MMD -I/usr/share/verilator/include -I/usr/share/verilator/include/vltstd -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TRACE=1 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-sign-compare -Wno-uninitialized -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable -Wno-shadow      -Os -c -o Vha_tff_top__ALL.o Vha_tff_top__ALL.cpp
+ar -cr Vha_tff_top__ALL.a Vha_tff_top__ALL.o
+ranlib Vha_tff_top__ALL.a
+g++    tb_ha_tff_top.o verilated.o verilated_vcd_c.o Vha_tff_top__ALL.a      -o Vha_tff_top
+make[1]: Leaving directory '/tmp/ha-tff-rtl/sim/obj_dir'
+./obj_dir/Vha_tff_top
+[WB] Configuring filter...
+[MAC] Sending valid packet (sysid 1)...
+[MAC] Sending invalid packet (sysid 2)...
+[WB] Reading stats...
+  Total pkts: 10
+  Passed:     0
+  Dropped:    2
+Simulation complete.
