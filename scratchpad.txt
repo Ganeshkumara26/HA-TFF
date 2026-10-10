@@ -1,0 +1,32 @@
+aug 14
+fsm state transitions are driving me insane. if tlast happens on the exact same cycle that the header finishes, do i go to payload or do i go to idle? need to check axi stream spec.
+ans: tlast means END of frame. if it happens during header, frame is truncated. go to idle.
+
+aug 18
+why is the wishbone bus dropping the second read??
+edit: ah. pipelined mode. the lsu asserts stb twice in a row. my ack is delayed. the second stb gets ignored. gotta make ack combinational.
+
+aug 25
+the CRC in mavlink is so annoying. they add a "crc extra" byte to the end of the calculation that isnt actually in the packet. its a seed based on the message ID.
+in software (edp-core) i just appended it to the buffer before hashing.
+in hardware i have to wait until the payload is done, then do one more cycle of crc_accumulate with the extra byte, THEN compare.
+cost me 3 days to realize my hardware CRC was failing because i was doing the comparison one cycle too early.
+
+sept 5
+how big should the fifo be?
+mavlink heartbeat is 9 bytes payload + 10 bytes header = 19 bytes.
+sys_status is like 31 bytes.
+if the cpu gets an interrupt and takes 100 cycles to respond, at 100MHz (10ns) thats 1us.
+ethernet is 100Mbps = 12.5MB/s = 1 byte every 80ns.
+in 1us we receive 12 bytes.
+so a 64-byte fifo is PLENTY big enough to buffer the start of a packet while the cpu wakes up.
+
+sept 12
+vivado synthesis takes 3 minutes for a file that verilator compiles in 0.5 seconds.
+i am never using vivado simulator again. verilator + c++ is the way.
+thank you dr smith for forcing me to learn it.
+
+oct 2
+finally got everything wired up. top level compiles.
+need to integrate this into the veerwolf soc next semester.
+wonder how hard it is to write a zephyr driver for this.

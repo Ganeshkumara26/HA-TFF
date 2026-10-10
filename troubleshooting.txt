@@ -1,0 +1,13 @@
+# toolchain pain (how to fix things when they break)
+
+## Vivado 2026.1
+- **Synthesis hangs at 99%**: This is a known bug with the TCL console. It's not actually hanging, the GUI just stopped updating. Kill `vivado.exe` in Task Manager, delete the `.Xil` folder in your project directory, and restart.
+- **"Unable to determine FSM encoding"**: Vivado hates it when you manually assign binary values to states AND use `(* fsm_encoding = "one_hot" *)`. Pick one. Actually, just pick neither. Use an `enum` and let the tool do its job. See `old_attempts/fsm_onehot_broken.sv`.
+- **Spaces in paths**: Do NOT put this project in a folder like `C:\My Documents\FPGA`. Vivado's IP packager will fail silently because some internal script uses bash and doesn't quote paths properly. Use `C:\fpga_projects\`.
+
+## Verilator
+- **VCD files are huge**: If you run a simulation for a million cycles and `traceEverOn(true)` is set, your VCD file will be 10GB and your hard drive will fill up. Use `tfp->dump()` selectively if you are doing long runs.
+- **"Unsupported: SystemVerilog 2012 construct"**: Verilator doesn't support 100% of the SV spec. It supports all the synthesizable stuff, but if you try to use fancy constrained-random OOP features (like UVM), it will choke. Stick to simple classes or do the randomization in C++ (like `tb_utils.h`).
+
+## WSL & Windows
+- **Line endings**: If you edit a `.sv` file in Windows (CRLF) and then try to run a bash script in WSL that greps through it, it might fail. Tell VS Code to use `LF` for this project.

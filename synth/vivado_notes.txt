@@ -1,0 +1,9 @@
+vivado frustration log
+july - oct 2026
+
+- july 28: why does vivado open 3 different windows just to show me a schematic?
+- aug 5: the synthesis engine inferred a latch because i missed ONE default statement in a 300-line case block. it took 20 minutes to synthesize and then failed in implementation. VERILATOR TOLD ME ABOUT THE LATCH IN 0.5 SECONDS. why did i not run verilator first.
+- aug 8: fought with `(* fsm_encoding *)` attributes for 4 hours. vivado ignored me completely.
+- aug 22: if you have a space in your project path, Vivado 2026.1 will silently fail to generate the IP core wrapper and then crash with a java null pointer exception. i hate this tool.
+- sept 10: "Synthesis failed. [Synth 8-9999] Unexpected error." cool. very helpful. deleted the .Xil folder and restarted. it worked. voodoo.
+- oct 4: ran timing analysis. 3.42ns WNS. i have no idea what that means physically but the number is positive so the green checkmark appeared. i will take the green checkmark.

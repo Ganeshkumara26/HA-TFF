@@ -1,0 +1,10 @@
+obj_dir/
+*.vcd
+.Xil/
+*.jou
+*.log
+*.pb
+*.wdb
+.DS_Store
+__pycache__/
+migen_filter_generated.v
